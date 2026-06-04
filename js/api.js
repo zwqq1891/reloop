@@ -1,9 +1,8 @@
 // js/api.js — frontend API client
 
-const API_BASE =
-  window.location.port === '3000'
-    ? window.location.origin
-    : (localStorage.getItem('reloop_api_base') || 'http://localhost:3000');
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000'
+  : window.location.origin;
 
 const SESSION_KEY = 'reloop_session';
 
@@ -29,7 +28,7 @@ function getAuthToken() {
 }
 
 async function apiRequest(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
+  const headers = { ...(options.headers || {}), 'ngrok-skip-browser-warning': '1' };
   const token = getAuthToken();
 
   if (token) headers.Authorization = `Bearer ${token}`;

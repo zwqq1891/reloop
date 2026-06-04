@@ -308,7 +308,7 @@ function clearCountdown() {
   if (el) el.style.display = 'none';
 }
 
-function startScan(fromAuto) {
+async function startScan(fromAuto) {
   if (scanning) return;
   scanning = true;
   clearCountdown();
@@ -318,17 +318,59 @@ function startScan(fromAuto) {
   const overlay = document.getElementById('scanning-overlay');
   if (overlay) overlay.classList.add('active');
 
-  setTimeout(() => {
+  try {
+    const imageBlob = captureFrame();
+    let result;
+
+    if (imageBlob) {
+      const formData = new FormData();
+      formData.append('image', imageBlob, 'capture.jpg');
+      result = await apiRequest('/api/classify', { method: 'POST', body: formData });
+      const match = WASTE_CATALOG.find(w => w.id === result.itemId) || WASTE_CATALOG[WASTE_CATALOG.length - 1];
+      result = {
+        ...match,
+        size: result.size || match.size,
+        cleanliness: result.cleanliness || match.cleanliness,
+        confidence: Math.round((result.confidence ?? match.confidence / 100) * 100)
+      };
+    } else {
+      result = getSelectedWaste();
+    }
+
     if (overlay) overlay.classList.remove('active');
-    renderScanResult(getSelectedWaste());
+    renderScanResult(result);
     const idle = document.getElementById('scan-idle');
     const autoRow = document.getElementById('auto-scan-row');
-    const result = document.getElementById('scan-result');
+    const resultEl = document.getElementById('scan-result');
     if (idle) idle.style.display = 'none';
     if (autoRow) autoRow.style.display = 'none';
-    if (result) result.classList.add('show');
+    if (resultEl) resultEl.classList.add('show');
+  } catch (error) {
+    if (overlay) overlay.classList.remove('active');
+    alert(`AI 辨識失敗：${error.message}`);
+  } finally {
     scanning = false;
-  }, 2200);
+    if (btn) btn.disabled = false;
+  }
+}
+
+function captureFrame() {
+  const video = document.getElementById('cam-video');
+  if (!video || video.style.display === 'none' || video.readyState < 2) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  return dataURLtoBlob(canvas.toDataURL('image/jpeg', 0.85));
+}
+
+function dataURLtoBlob(dataURL) {
+  const [header, data] = dataURL.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
 }
 
 function resetScan() {

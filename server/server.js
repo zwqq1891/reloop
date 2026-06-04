@@ -6,7 +6,27 @@ const multer = require('multer');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const { GoogleGenAI } = require('@google/genai');
 const pool = require('./db');
+
+const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const CLASSIFY_PROMPT = `你是一個廢棄物辨識 AI。請分析圖片中最明顯的廢棄物，以 JSON 格式回傳結果。
+
+只能從以下 itemId 選一個：
+- pet-bottle（PET 寶特瓶、任何塑膠瓶罐）
+- aluminum-can（鋁罐、鐵罐）
+- cardboard（紙板、紙箱、紙類）
+- glass-bottle（玻璃瓶、玻璃罐）
+- oily-lunchbox（有油污的餐盒、便當盒）
+- general-waste（其他無法辨識或不可回收垃圾）
+
+size 只能填：小型、中型、大型
+cleanliness 只能填：乾淨、輕微殘留、嚴重油污、不適用
+confidence 為 0.0～1.0 的小數
+
+回傳純 JSON，不加任何說明文字：
+{"itemId":"...","size":"...","cleanliness":"...","confidence":0.0}`;
 
 const app = express();
 const upload = multer({
@@ -315,17 +335,49 @@ app.post('/api/records', requireAuth, async (req, res, next) => {
   }
 });
 
-app.post('/api/classify', requireAuth, upload.single('image'), async (req, res) => {
-  res.status(501).json({
-    error: 'AI classification is not connected yet.',
-    nextStep: 'Connect OpenAI or Gemini here, then call POST /api/records with the AI result.',
-    expectedAiResult: {
-      itemId: 'pet-bottle',
-      size: '中型',
-      cleanliness: '乾淨',
-      confidence: 0.92
+app.post('/api/classify', requireAuth, upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No image uploaded.' });
+      return;
     }
-  });
+
+    const result = await gemini.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { role: 'user', parts: [
+          { text: CLASSIFY_PROMPT },
+          { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } }
+        ]}
+      ]
+    });
+
+    const raw = result.text.replace(/```json|```/g, '').trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      res.status(502).json({ error: 'AI returned invalid JSON.', raw });
+      return;
+    }
+
+    const { itemId, size, cleanliness, confidence } = parsed;
+    const validIds = ['pet-bottle', 'aluminum-can', 'cardboard', 'glass-bottle', 'oily-lunchbox', 'general-waste'];
+    if (!validIds.includes(itemId)) {
+      res.status(502).json({ error: 'AI returned unknown itemId.', parsed });
+      return;
+    }
+
+    await pool.execute(
+      `INSERT INTO classification_logs (user_id, image_mime, ai_provider, raw_result, normalized_item_id, confidence)
+       VALUES (:userId, :mime, 'gemini', :raw, :itemId, :confidence)`,
+      { userId: req.user.id, mime: req.file.mimetype, raw: JSON.stringify(parsed), itemId, confidence: confidence ?? null }
+    );
+
+    res.json({ itemId, size, cleanliness, confidence });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/rewards', async (req, res, next) => {
