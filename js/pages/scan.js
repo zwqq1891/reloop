@@ -96,9 +96,43 @@ function renderScan(container) {
 
       </div>
     </div>
+
+    <div class="item-stats-card">
+      <div class="item-stats-header">
+        <span class="item-stats-title">累積回收紀錄</span>
+        <span class="item-stats-sub" id="item-stats-sub"></span>
+      </div>
+      <div id="item-stats-body"><div class="scan-list-empty" style="padding:16px 0">讀取中...</div></div>
+    </div>
   `;
 
   startCamera();
+  loadItemStats();
+}
+
+async function loadItemStats() {
+  const body  = document.getElementById('item-stats-body');
+  const sub   = document.getElementById('item-stats-sub');
+  if (!body) return;
+  try {
+    const { items } = await apiRequest('/api/stats/items');
+    const total = items.reduce((s, i) => s + i.count, 0);
+    const max   = Math.max(...items.map(i => i.count), 1);
+    if (sub) sub.textContent = `共 ${total} 筆`;
+    body.innerHTML = items.map(item => {
+      const pct = Math.round((item.count / max) * 100);
+      return `
+        <div class="stat-bar-row">
+          <div class="stat-bar-label">${item.name}</div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="stat-bar-count">${item.count}</div>
+        </div>`;
+    }).join('');
+  } catch {
+    if (body) body.innerHTML = '<div class="scan-list-empty" style="padding:16px 0">無法載入統計</div>';
+  }
 }
 
 function renderScanList() {

@@ -228,6 +228,23 @@ app.get('/api/summary', requireAuth, async (req, res, next) => {
   }
 });
 
+app.get('/api/stats/items', requireAuth, async (req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT wt.item_id, wt.name, COUNT(rr.id) AS count
+       FROM waste_types wt
+       LEFT JOIN recycle_records rr ON rr.waste_type_id = wt.id AND rr.user_id = :userId
+       WHERE wt.is_active = 1
+       GROUP BY wt.item_id, wt.name
+       ORDER BY wt.id`,
+      { userId: req.user.id }
+    );
+    res.json({ items: rows.map(r => ({ ...r, count: Number(r.count) })) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/records', requireAuth, async (req, res, next) => {
   try {
     const [records] = await pool.execute(
