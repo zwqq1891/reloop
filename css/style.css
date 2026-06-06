@@ -390,6 +390,53 @@ body.dark .waste-option.active { background: rgba(22,163,74,.15); }
 .scan-ring { width: 80px; height: 80px; border: 3px solid #34d399; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ===== SCAN LIST ===== */
+.scan-controls { display: flex; flex-direction: column; gap: 12px; }
+.scan-list {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; overflow: hidden; transition: background .3s;
+}
+.scan-list-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.scan-list-count { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700; color: var(--muted); }
+.scan-list-items { max-height: 280px; overflow-y: auto; }
+.scan-list-empty {
+  padding: 28px 18px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7;
+}
+.scan-list-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  animation: fadein .2s ease;
+}
+.scan-item-info { flex: 1; min-width: 0; }
+.scan-item-name { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.scan-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.scan-item-points {
+  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 800;
+  color: var(--accent); flex-shrink: 0; white-space: nowrap;
+}
+.btn-remove-item {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+}
+.btn-remove-item:hover { color: var(--danger); background: #fef2f2; }
+.scan-list-footer { padding: 14px 18px; border-top: 1px solid var(--border); background: var(--bg); }
+.scan-total-row {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px; font-size: 12px; color: var(--muted);
+}
+.scan-total-points { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--green); }
+.btn-confirm-all {
+  width: 100%; padding: 14px; background: var(--green); color: #fff;
+  border: none; border-radius: 12px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: background .2s;
+}
+.btn-confirm-all:hover:not(:disabled) { background: #15803d; }
+.btn-confirm-all:disabled { opacity: .4; cursor: not-allowed; }
+
 /* ===== REWARDS ===== */
 .rewards-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .rewards-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }

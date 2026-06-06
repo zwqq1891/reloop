@@ -352,7 +352,12 @@ app.post('/api/classify', requireAuth, upload.single('image'), async (req, res, 
       ]
     });
 
-    const raw = result.text.replace(/```json|```/g, '').trim();
+    const textContent = result.text;
+    if (!textContent) {
+      res.status(502).json({ error: 'AI returned no text content.' });
+      return;
+    }
+    const raw = textContent.replace(/```json|```/g, '').trim();
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -457,8 +462,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-// =================【 修正：移除 127.0.0.1 綁定 】=================
 const port = Number(process.env.PORT || 3000);
-app.listen(port, () => {
-  console.log(`reloop API server running on http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`reloop API server running on http://localhost:${port}`);
+  });
+}
+
+module.exports = { app };

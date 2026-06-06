@@ -1,132 +1,49 @@
-// js/pages/scan.js — AI 掃描辨識頁
+// js/pages/scan.js — AI 掃描辨識頁（清單模式）
 
 let scanning = false;
 let autoScanEnabled = false;
 let countdownInterval = null;
 let countdownSec = 3;
-let selectedWasteId = 'pet-bottle';
-let latestScanResult = null;
+let scannedItems = [];
 
 const WASTE_CATALOG = [
-  {
-    id: 'pet-bottle',
-    name: 'PET 寶特瓶',
-    material: '塑膠類',
-    size: '中型',
-    cleanliness: '乾淨',
-    bin: '塑膠回收桶',
-    basePoints: 40,
-    sizeMultiplier: 1,
-    cleanlinessMultiplier: 1,
-    confidence: 94,
-    note: '請先倒空內容物，瓶身壓扁後再投入塑膠回收桶。'
-  },
-  {
-    id: 'aluminum-can',
-    name: '鋁罐',
-    material: '金屬類',
-    size: '小型',
-    cleanliness: '乾淨',
-    bin: '金屬回收桶',
-    basePoints: 60,
-    sizeMultiplier: 0.8,
-    cleanlinessMultiplier: 1,
-    confidence: 96,
-    note: '請確認罐內已排空，壓扁後可提升桶內收納效率。'
-  },
-  {
-    id: 'cardboard',
-    name: '紙板',
-    material: '紙類',
-    size: '大型',
-    cleanliness: '乾淨',
-    bin: '紙類回收桶',
-    basePoints: 25,
-    sizeMultiplier: 1.3,
-    cleanlinessMultiplier: 1,
-    confidence: 91,
-    note: '請攤平或摺疊紙板，避免混入膠帶、食物殘渣與油污。'
-  },
-  {
-    id: 'glass-bottle',
-    name: '玻璃瓶',
-    material: '玻璃類',
-    size: '中型',
-    cleanliness: '乾淨',
-    bin: '玻璃回收桶',
-    basePoints: 45,
-    sizeMultiplier: 1,
-    cleanlinessMultiplier: 1,
-    confidence: 93,
-    note: '請清空瓶內液體，保持瓶身完整，避免破裂造成清運風險。'
-  },
-  {
-    id: 'oily-lunchbox',
-    name: '有油污餐盒',
-    material: '污染回收物',
-    size: '中型',
-    cleanliness: '嚴重油污',
-    bin: '一般垃圾桶',
-    basePoints: 25,
-    sizeMultiplier: 1,
-    cleanlinessMultiplier: 0,
-    confidence: 88,
-    note: '油污會降低回收純淨度，未清洗前不發放回收點數。'
-  },
-  {
-    id: 'general-waste',
-    name: '一般垃圾',
-    material: '不可回收物',
-    size: '中型',
-    cleanliness: '不適用',
-    bin: '一般垃圾桶',
-    basePoints: 0,
-    sizeMultiplier: 1,
-    cleanlinessMultiplier: 0,
-    confidence: 90,
-    note: '此品項不屬於資源回收範圍，請投入一般垃圾桶。'
-  }
+  { id: 'pet-bottle',    name: 'PET 寶特瓶',   material: '塑膠類',    size: '中型', cleanliness: '乾淨',   bin: '塑膠回收桶', basePoints: 40, sizeMultiplier: 1,   cleanlinessMultiplier: 1 },
+  { id: 'aluminum-can',  name: '鋁罐',          material: '金屬類',    size: '小型', cleanliness: '乾淨',   bin: '金屬回收桶', basePoints: 60, sizeMultiplier: 0.8, cleanlinessMultiplier: 1 },
+  { id: 'cardboard',     name: '紙板',          material: '紙類',      size: '大型', cleanliness: '乾淨',   bin: '紙類回收桶', basePoints: 25, sizeMultiplier: 1.3, cleanlinessMultiplier: 1 },
+  { id: 'glass-bottle',  name: '玻璃瓶',        material: '玻璃類',    size: '中型', cleanliness: '乾淨',   bin: '玻璃回收桶', basePoints: 45, sizeMultiplier: 1,   cleanlinessMultiplier: 1 },
+  { id: 'oily-lunchbox', name: '有油污餐盒',    material: '污染回收物', size: '中型', cleanliness: '嚴重油污', bin: '一般垃圾桶', basePoints: 25, sizeMultiplier: 1,   cleanlinessMultiplier: 0 },
+  { id: 'general-waste', name: '一般垃圾',      material: '不可回收物', size: '中型', cleanliness: '不適用', bin: '一般垃圾桶', basePoints: 0,  sizeMultiplier: 1,   cleanlinessMultiplier: 0 }
 ];
+
+const SIZE_MULTIPLIERS      = { '小型': 0.8, '中型': 1, '大型': 1.3 };
+const CLEANLINESS_MULTIPLIERS = { '乾淨': 1, '輕微殘留': 0.7, '嚴重油污': 0, '不適用': 0 };
+
+function calculatePoints(item) {
+  const sm = SIZE_MULTIPLIERS[item.size] ?? 1;
+  const cm = CLEANLINESS_MULTIPLIERS[item.cleanliness] ?? 0;
+  return Math.round(item.basePoints * sm * cm);
+}
 
 function renderScan(container) {
   scanning = false;
   autoScanEnabled = false;
+  scannedItems = [];
   clearCountdown();
 
   container.innerHTML = `
     <div class="scan-layout">
+
       <div class="cam-frame" id="cam-frame">
         <div class="scan-line"></div>
 
-        <!-- 倒計時顯示：正上方中間 -->
         <div id="auto-countdown" style="
-          display:none;
-          position:absolute;
-          top:18px;
-          left:50%;
-          transform:translateX(-50%);
-          z-index:20;
-          text-align:center;
-        ">
-          <div style="
-            background:rgba(0,0,0,.55);
-            backdrop-filter:blur(6px);
-            border-radius:999px;
-            padding:6px 20px;
-            display:flex;
-            align-items:center;
-            gap:8px;
-          ">
+          display:none; position:absolute; top:18px; left:50%;
+          transform:translateX(-50%); z-index:20; text-align:center;">
+          <div style="background:rgba(0,0,0,.55);backdrop-filter:blur(6px);
+            border-radius:999px;padding:6px 20px;display:flex;align-items:center;gap:8px;">
             <span style="color:#4ade80;font-size:11px;font-weight:700;letter-spacing:1px">AUTO</span>
-            <span id="countdown-num" style="
-              font-family:'Syne',sans-serif;
-              font-size:22px;
-              font-weight:800;
-              color:#fff;
-              min-width:24px;
-              text-align:center;
-              line-height:1;
-            ">3</span>
+            <span id="countdown-num" style="font-family:'Syne',sans-serif;font-size:22px;
+              font-weight:800;color:#fff;min-width:24px;text-align:center;line-height:1;">3</span>
             <span style="color:#4ade80;font-size:11px;font-weight:700;letter-spacing:1px">s</span>
           </div>
         </div>
@@ -143,34 +60,40 @@ function renderScan(container) {
       </div>
 
       <div class="scan-panel">
-        <div class="scan-idle" id="scan-idle">
-          <div class="scan-idle-icon">📷</div>
-          <div class="scan-idle-title">reloop Vision AI</div>
-          <div class="scan-idle-sub">選擇展示品項後開始辨識，<br/>系統會依材質、大小與清潔度計算點數</div>
-          <div class="waste-selector">
-            ${WASTE_CATALOG.map(item => `
-              <button class="waste-option ${item.id === selectedWasteId ? 'active' : ''}" onclick="selectWasteDemo('${item.id}')">
-                <span>${item.name}</span>
-                <small>${item.material}</small>
-              </button>
-            `).join('')}
-          </div>
+
+        <div class="scan-controls">
           <button class="scan-btn" id="scan-btn" onclick="startScan()">啟動辨識</button>
-        </div>
-
-        <!-- 自動辨識開關 -->
-        <div class="auto-scan-row" id="auto-scan-row">
-          <div class="auto-scan-info">
-            <div class="auto-scan-title">🤖 自動辨識模式</div>
-            <div class="auto-scan-sub" id="auto-scan-sub">開啟後每 3 秒自動掃描一次</div>
+          <div class="auto-scan-row" id="auto-scan-row">
+            <div class="auto-scan-info">
+              <div class="auto-scan-title">🤖 自動辨識模式</div>
+              <div class="auto-scan-sub" id="auto-scan-sub">開啟後每 3 秒自動掃描一次</div>
+            </div>
+            <label class="toggle-wrap" style="margin:0">
+              <input type="checkbox" id="auto-scan-toggle" onchange="toggleAutoScan(this.checked)"/>
+              <span class="toggle"></span>
+            </label>
           </div>
-          <label class="toggle-wrap" style="margin:0">
-            <input type="checkbox" id="auto-scan-toggle" onchange="toggleAutoScan(this.checked)"/>
-            <span class="toggle"></span>
-          </label>
         </div>
 
-        <div class="scan-result" id="scan-result"></div>
+        <div class="scan-list">
+          <div class="scan-list-header">
+            掃描清單
+            <span class="scan-list-count" id="scan-count">0 件</span>
+          </div>
+          <div class="scan-list-items" id="scan-list-items">
+            <div class="scan-list-empty">尚未掃描任何物品<br><span style="font-size:11px">拍照後自動加入清單</span></div>
+          </div>
+          <div class="scan-list-footer">
+            <div class="scan-total-row">
+              <span>預計點數</span>
+              <span class="scan-total-points" id="scan-total-points">0 CCN</span>
+            </div>
+            <button class="btn-confirm-all" id="confirm-all-btn" onclick="confirmAllScans()" disabled>
+              確認全部投入 ✓
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   `;
@@ -178,75 +101,51 @@ function renderScan(container) {
   startCamera();
 }
 
-function calculatePoints(item) {
-  return Math.round(item.basePoints * item.sizeMultiplier * item.cleanlinessMultiplier);
+function renderScanList() {
+  const countEl    = document.getElementById('scan-count');
+  const listEl     = document.getElementById('scan-list-items');
+  const totalEl    = document.getElementById('scan-total-points');
+  const confirmBtn = document.getElementById('confirm-all-btn');
+  if (!listEl) return;
+
+  const total = scannedItems.reduce((sum, item) => sum + calculatePoints(item), 0);
+  if (countEl)    countEl.textContent = `${scannedItems.length} 件`;
+  if (totalEl)    totalEl.textContent = `${total} CCN`;
+  if (confirmBtn) confirmBtn.disabled = scannedItems.length === 0;
+
+  if (scannedItems.length === 0) {
+    listEl.innerHTML = `
+      <div class="scan-list-empty">
+        尚未掃描任何物品<br>
+        <span style="font-size:11px">拍照後自動加入清單</span>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = scannedItems.map((item, i) => {
+    const pts = calculatePoints(item);
+    return `
+      <div class="scan-list-item">
+        <div class="scan-item-info">
+          <div class="scan-item-name">${item.name}</div>
+          <div class="scan-item-meta">${item.material} · ${item.size} · ${item.cleanliness}</div>
+        </div>
+        <div class="scan-item-points">${pts > 0 ? `+${pts}` : '0'} CCN</div>
+        <button class="btn-remove-item" onclick="removeScannedItem(${i})" title="移除">×</button>
+      </div>`;
+  }).join('');
 }
 
-function selectWasteDemo(itemId) {
-  selectedWasteId = itemId;
-  document.querySelectorAll('.waste-option').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('onclick').includes(itemId));
-  });
-}
-
-function getSelectedWaste() {
-  return WASTE_CATALOG.find(item => item.id === selectedWasteId) || WASTE_CATALOG[0];
-}
-
-function renderScanResult(item) {
-  const points = calculatePoints(item);
-  const result = document.getElementById('scan-result');
-  if (!result) return;
-
-  latestScanResult = { ...item, points };
-  result.innerHTML = `
-    <div class="result-kicker">辨識結果</div>
-    <div class="result-type">${item.name}</div>
-    <div class="result-grid result-grid-4">
-      <div class="result-stat">
-        <div class="result-stat-label">材質</div>
-        <div class="result-stat-val">${item.material}</div>
-      </div>
-      <div class="result-stat">
-        <div class="result-stat-label">大小</div>
-        <div class="result-stat-val">${item.size}</div>
-      </div>
-      <div class="result-stat">
-        <div class="result-stat-label">清潔度</div>
-        <div class="result-stat-val">${item.cleanliness}</div>
-      </div>
-      <div class="result-stat green">
-        <div class="result-stat-label">Reward</div>
-        <div class="result-stat-val">+${points} CCN</div>
-      </div>
-    </div>
-    <div class="result-rule">
-      <div>
-        <strong>點數公式</strong>
-        <span>${item.basePoints} 基礎分 × ${item.sizeMultiplier} 大小倍率 × ${item.cleanlinessMultiplier} 清潔度倍率 = ${points} CCN</span>
-      </div>
-      <div>
-        <strong>建議投放</strong>
-        <span>${item.bin}</span>
-      </div>
-      <div>
-        <strong>信心分數</strong>
-        <span>${item.confidence}%</span>
-      </div>
-    </div>
-    <div class="${points > 0 ? 'result-tip' : 'result-tip warning'}">
-      ${item.note}
-    </div>
-    <div class="result-actions">
-      <button class="btn-retry" onclick="resetScan()">重試</button>
-      <button class="btn-confirm" id="confirm-scan-btn" onclick="confirmScan()">確認投入系統 ✓</button>
-    </div>
-  `;
+function removeScannedItem(index) {
+  scannedItems.splice(index, 1);
+  renderScanList();
 }
 
 async function startCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }
+    });
     const video = document.getElementById('cam-video');
     if (!video) return;
     video.srcObject = stream;
@@ -261,7 +160,9 @@ async function startCamera() {
 function toggleAutoScan(enabled) {
   autoScanEnabled = enabled;
   clearCountdown();
+  const row = document.getElementById('auto-scan-row');
   const sub = document.getElementById('auto-scan-sub');
+  if (row) row.classList.toggle('auto-active', enabled);
   if (enabled) {
     if (sub) sub.textContent = '自動掃描進行中...';
     runAutoCountdown();
@@ -272,12 +173,10 @@ function toggleAutoScan(enabled) {
 
 function runAutoCountdown() {
   if (!autoScanEnabled || scanning) return;
-
   countdownSec = 3;
   const countdownEl = document.getElementById('auto-countdown');
-  const numEl = document.getElementById('countdown-num');
+  const numEl       = document.getElementById('countdown-num');
   if (!countdownEl || !numEl) return;
-
   numEl.textContent = countdownSec;
   countdownEl.style.display = 'block';
 
@@ -285,16 +184,12 @@ function runAutoCountdown() {
     countdownSec--;
     const n = document.getElementById('countdown-num');
     if (n) n.textContent = countdownSec;
-
     if (countdownSec <= 0) {
       clearInterval(countdownInterval);
       countdownInterval = null;
       const el = document.getElementById('auto-countdown');
       if (el) el.style.display = 'none';
-      // 實際觸發掃描
-      if (autoScanEnabled && !scanning) {
-        startScan(true);
-      }
+      if (autoScanEnabled && !scanning) startScan(true);
     }
   }, 1000);
 }
@@ -313,44 +208,38 @@ async function startScan(fromAuto) {
   scanning = true;
   clearCountdown();
 
-  const btn = document.getElementById('scan-btn');
-  if (btn) btn.disabled = true;
+  const btn     = document.getElementById('scan-btn');
   const overlay = document.getElementById('scanning-overlay');
+  if (btn)     btn.disabled = true;
   if (overlay) overlay.classList.add('active');
 
   try {
     const imageBlob = captureFrame();
-    let result;
-
-    if (imageBlob) {
-      const formData = new FormData();
-      formData.append('image', imageBlob, 'capture.jpg');
-      result = await apiRequest('/api/classify', { method: 'POST', body: formData });
-      const match = WASTE_CATALOG.find(w => w.id === result.itemId) || WASTE_CATALOG[WASTE_CATALOG.length - 1];
-      result = {
-        ...match,
-        size: result.size || match.size,
-        cleanliness: result.cleanliness || match.cleanliness,
-        confidence: Math.round((result.confidence ?? match.confidence / 100) * 100)
-      };
-    } else {
-      result = getSelectedWaste();
+    if (!imageBlob) {
+      alert('請先允許相機存取權限。');
+      return;
     }
 
-    if (overlay) overlay.classList.remove('active');
-    renderScanResult(result);
-    const idle = document.getElementById('scan-idle');
-    const autoRow = document.getElementById('auto-scan-row');
-    const resultEl = document.getElementById('scan-result');
-    if (idle) idle.style.display = 'none';
-    if (autoRow) autoRow.style.display = 'none';
-    if (resultEl) resultEl.classList.add('show');
+    const formData = new FormData();
+    formData.append('image', imageBlob, 'capture.jpg');
+    const result = await apiRequest('/api/classify', { method: 'POST', body: formData });
+
+    const match = WASTE_CATALOG.find(w => w.id === result.itemId) || WASTE_CATALOG[WASTE_CATALOG.length - 1];
+    scannedItems.push({
+      ...match,
+      size:        result.size        || match.size,
+      cleanliness: result.cleanliness || match.cleanliness,
+      confidence:  Math.round((result.confidence ?? 0) * 100)
+    });
+    renderScanList();
+
   } catch (error) {
-    if (overlay) overlay.classList.remove('active');
     alert(`AI 辨識失敗：${error.message}`);
   } finally {
+    if (overlay) overlay.classList.remove('active');
     scanning = false;
-    if (btn) btn.disabled = false;
+    if (btn)  btn.disabled = false;
+    if (autoScanEnabled) setTimeout(() => runAutoCountdown(), 500);
   }
 }
 
@@ -358,7 +247,7 @@ function captureFrame() {
   const video = document.getElementById('cam-video');
   if (!video || video.style.display === 'none' || video.readyState < 2) return null;
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth || 640;
+  canvas.width  = video.videoWidth  || 640;
   canvas.height = video.videoHeight || 480;
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
   return dataURLtoBlob(canvas.toDataURL('image/jpeg', 0.85));
@@ -366,57 +255,59 @@ function captureFrame() {
 
 function dataURLtoBlob(dataURL) {
   const [header, data] = dataURL.split(',');
-  const mime = header.match(/:(.*?);/)[1];
+  const mime  = header.match(/:(.*?);/)[1];
   const bytes = atob(data);
-  const arr = new Uint8Array(bytes.length);
+  const arr   = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
 
-function resetScan() {
-  scanning = false;
-  const idle = document.getElementById('scan-idle');
-  const autoRow = document.getElementById('auto-scan-row');
-  const result = document.getElementById('scan-result');
-  const btn = document.getElementById('scan-btn');
-  if (idle) idle.style.display = '';
-  if (autoRow) autoRow.style.display = '';
-  if (result) result.classList.remove('show');
-  if (btn) btn.disabled = false;
-  latestScanResult = null;
+async function confirmAllScans() {
+  if (scannedItems.length === 0) return;
 
-  // 若自動模式仍開著，重新倒計時
-  if (autoScanEnabled) {
-    setTimeout(() => runAutoCountdown(), 300);
-  }
-}
-
-async function confirmScan() {
   autoScanEnabled = false;
+  const toggle = document.getElementById('auto-scan-toggle');
+  if (toggle) toggle.checked = false;
   clearCountdown();
-  scanning = false;
-  const confirmBtn = document.getElementById('confirm-scan-btn');
-  if (confirmBtn) confirmBtn.disabled = true;
 
-  try {
-    if (latestScanResult) {
+  const confirmBtn = document.getElementById('confirm-all-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '儲存中...';
+  }
+
+  let successCount = 0;
+  let totalPoints  = 0;
+  const errors     = [];
+
+  for (const item of scannedItems) {
+    try {
       const record = await apiRequest('/api/records', {
         method: 'POST',
         body: {
-          itemId: latestScanResult.id,
-          size: latestScanResult.size,
-          cleanliness: latestScanResult.cleanliness,
-          confidence: latestScanResult.confidence
+          itemId:      item.id,
+          size:        item.size,
+          cleanliness: item.cleanliness,
+          confidence:  item.confidence
         }
       });
-      alert(`已記錄：${record.name}\n投放桶：${record.bin}\n獲得點數：${record.points} CCN`);
+      successCount++;
+      totalPoints += record.points;
+    } catch (err) {
+      errors.push(`${item.name}：${err.message}`);
     }
-    const toggle = document.getElementById('auto-scan-toggle');
-    if (toggle) toggle.checked = false;
-    resetScan();
+  }
+
+  if (successCount > 0) {
+    alert(`成功記錄 ${successCount} 件回收物\n獲得點數：+${totalPoints} CCN`);
+    scannedItems = [];
+    renderScanList();
     switchPage('dashboard');
-  } catch (error) {
-    alert(`寫入回收紀錄失敗：${error.message}`);
-    if (confirmBtn) confirmBtn.disabled = false;
+  } else {
+    alert(`儲存失敗：\n${errors.join('\n')}`);
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '確認全部投入 ✓';
+    }
   }
 }
