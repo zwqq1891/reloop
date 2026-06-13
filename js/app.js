@@ -2,9 +2,10 @@
 
 const PAGE_LABELS = {
   dashboard: 'Overview',
-  scan: 'AI Vision',
-  stats: 'Analytics',
-  rewards: 'Rewards'
+  scan:      'AI Vision',
+  stats:     'Analytics',
+  rewards:   'Rewards',
+  game:      'Eco-Tree Game',
 };
 
 let currentPage = 'dashboard';
@@ -28,6 +29,7 @@ function switchPage(pageId) {
     case 'scan':      renderScan(wrapper);      break;
     case 'stats':     renderStats(wrapper);     break;
     case 'rewards':   renderRewards(wrapper);   break;
+    case 'game':      renderGamePage(wrapper);  break;
   }
 
   content.appendChild(wrapper);
