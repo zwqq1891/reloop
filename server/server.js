@@ -9,6 +9,13 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { GoogleGenAI } = require('@google/genai');
 const pool = require('./db');
 
+// Auto-migrate: add region column to game_action_logs (safe to re-run)
+Promise.resolve(
+  pool.execute(`ALTER TABLE game_action_logs ADD COLUMN region ENUM('north','central','south','east') NULL`)
+).catch(e => {
+  if (e && e.code !== 'ER_DUP_FIELDNAME') console.warn('[migrate] region column:', e.message);
+});
+
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const CLASSIFY_PROMPT = `你是一個廢棄物辨識 AI。請分析圖片中最明顯的廢棄物，以 JSON 格式回傳結果。
@@ -61,6 +68,24 @@ const CLEANLINESS_MULTIPLIERS = {
   '嚴重油污': 0,
   '不適用': 0
 };
+
+const GAME_ACTIONS = {
+  water:     { cost: 10, exp: 15 },
+  fertilize: { cost: 30, exp: 50 },
+  harvest:   { cost: 0,  exp: 0  },
+};
+const VALID_REGIONS  = ['north', 'central', 'south', 'east'];
+const REGION_NAMES   = { north: '北部', central: '中部', south: '南部', east: '東部' };
+const LEVEL_EXP      = [0, 100, 300, 600]; // min EXP for Lv1/2/3/4
+const TREE_MAX_LEVEL = 4;
+const TREE_CO2_KG    = 21.7; // kg CO₂ absorbed per harvested tree (approximation)
+
+function calcTreeLevel(exp) {
+  for (let lv = TREE_MAX_LEVEL; lv >= 1; lv--) {
+    if (exp >= LEVEL_EXP[lv - 1]) return lv;
+  }
+  return 1;
+}
 
 function createToken(user) {
   return jwt.sign(
@@ -468,6 +493,225 @@ app.post('/api/rewards/:id/redeem', requireAuth, async (req, res, next) => {
     next(error);
   } finally {
     connection.release();
+  }
+});
+
+// ──────────────────────────────────────────────
+// ECO-TREE GAME ROUTES
+// ──────────────────────────────────────────────
+
+app.get('/api/game/status', requireAuth, async (req, res, next) => {
+  try {
+    await pool.execute(
+      'INSERT IGNORE INTO user_game_status (user_id) VALUES (:userId)',
+      { userId: req.user.id }
+    );
+
+    const [[status]] = await pool.execute(
+      `SELECT ugs.*, u.carbon_coins
+       FROM user_game_status ugs
+       JOIN users u ON u.id = ugs.user_id
+       WHERE ugs.user_id = :userId`,
+      { userId: req.user.id }
+    );
+
+    const [[globalStats]] = await pool.execute(
+      `SELECT
+         COALESCE(SUM(harvested_trees_count), 0) AS total_mature_trees,
+         COUNT(*) AS total_players
+       FROM user_game_status`
+    );
+
+    const level    = Number(status.tree_level);
+    const exp      = Number(status.current_exp);
+    const expFloor = LEVEL_EXP[level - 1];
+    const expNext  = level < TREE_MAX_LEVEL ? LEVEL_EXP[level] : null;
+    const totalMature = Number(globalStats.total_mature_trees);
+
+    res.json({
+      tree: {
+        name:               status.current_tree_name,
+        level,
+        currentExp:         exp,
+        expForCurrentLevel: expFloor,
+        expForNextLevel:    expNext,
+        totalWatered:       Number(status.total_watered),
+        totalFertilized:    Number(status.total_fertilized),
+        harvestedCount:     Number(status.harvested_trees_count),
+        canHarvest:         level >= TREE_MAX_LEVEL,
+      },
+      wallet: { carbonCoins: Number(status.carbon_coins) },
+      globalStats: {
+        totalMatureTrees: totalMature,
+        totalPlayers:     Number(globalStats.total_players),
+        co2AbsorbedKg:    Number((totalMature * TREE_CO2_KG).toFixed(1)),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/game/action', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    const { action, region } = req.body;
+
+    if (!Object.prototype.hasOwnProperty.call(GAME_ACTIONS, action)) {
+      res.status(400).json({ error: `Invalid action. Valid: ${Object.keys(GAME_ACTIONS).join(', ')}.` });
+      return;
+    }
+
+    if (action === 'harvest' && !VALID_REGIONS.includes(region)) {
+      res.status(400).json({ error: '請選擇有效的種植區域（北部/中部/南部/東部）。' });
+      return;
+    }
+
+    const { cost, exp: expGain } = GAME_ACTIONS[action];
+
+    await connection.beginTransaction();
+
+    const [[user]] = await connection.execute(
+      'SELECT carbon_coins FROM users WHERE id = :userId FOR UPDATE',
+      { userId: req.user.id }
+    );
+
+    await connection.execute(
+      'INSERT IGNORE INTO user_game_status (user_id) VALUES (:userId)',
+      { userId: req.user.id }
+    );
+    const [[status]] = await connection.execute(
+      'SELECT * FROM user_game_status WHERE user_id = :userId FOR UPDATE',
+      { userId: req.user.id }
+    );
+
+    const levelBefore = Number(status.tree_level);
+    const expBefore   = Number(status.current_exp);
+
+    if (Number(user.carbon_coins) < cost) {
+      await connection.rollback();
+      res.status(400).json({
+        error: `碳幣不足。此動作需要 ${cost} CCN，目前餘額：${Number(user.carbon_coins)} CCN。`
+      });
+      return;
+    }
+
+    if (action === 'harvest' && levelBefore < TREE_MAX_LEVEL) {
+      await connection.rollback();
+      res.status(400).json({ error: '樹木尚未成熟，需達到 Lv.4 方可移栽。' });
+      return;
+    }
+
+    let newExp     = expBefore + expGain;
+    let levelAfter = calcTreeLevel(newExp);
+
+    if (action === 'harvest') {
+      newExp     = 0;
+      levelAfter = 1;
+      await connection.execute(
+        `UPDATE user_game_status
+         SET current_exp = 0, tree_level = 1,
+             harvested_trees_count = harvested_trees_count + 1
+         WHERE user_id = :userId`,
+        { userId: req.user.id }
+      );
+    } else {
+      const countCol = action === 'water' ? 'total_watered' : 'total_fertilized';
+      await connection.execute(
+        `UPDATE user_game_status
+         SET current_exp = :newExp, tree_level = :levelAfter,
+             ${countCol} = ${countCol} + 1
+         WHERE user_id = :userId`,
+        { newExp, levelAfter, userId: req.user.id }
+      );
+      await connection.execute(
+        'UPDATE users SET carbon_coins = carbon_coins - :cost WHERE id = :userId',
+        { cost, userId: req.user.id }
+      );
+      await connection.execute(
+        `INSERT INTO coin_transactions (user_id, type, amount, description)
+         VALUES (:userId, 'redeem', :amount, :description)`,
+        {
+          userId: req.user.id,
+          amount: -cost,
+          description: `Eco-Tree：${action === 'water' ? '澆水' : '施肥'}`,
+        }
+      );
+    }
+
+    await connection.execute(
+      `INSERT INTO game_action_logs
+         (user_id, action_type, coin_spent, exp_gained, level_before, level_after, region)
+       VALUES (:userId, :actionType, :coinSpent, :expGained, :levelBefore, :levelAfter, :region)`,
+      {
+        userId:      req.user.id,
+        actionType:  action,
+        coinSpent:   cost,
+        expGained:   expGain,
+        levelBefore,
+        levelAfter,
+        region:      action === 'harvest' ? region : null,
+      }
+    );
+
+    await connection.commit();
+
+    const [[updatedUser]]   = await pool.execute(
+      'SELECT carbon_coins FROM users WHERE id = :userId',
+      { userId: req.user.id }
+    );
+    const [[updatedStatus]] = await pool.execute(
+      'SELECT * FROM user_game_status WHERE user_id = :userId',
+      { userId: req.user.id }
+    );
+
+    const finalLevel = Number(updatedStatus.tree_level);
+    const finalExp   = Number(updatedStatus.current_exp);
+
+    res.json({
+      ok:         true,
+      action,
+      coinSpent:  cost,
+      expGained:  expGain,
+      leveledUp:  action !== 'harvest' && levelAfter > levelBefore,
+      harvested:  action === 'harvest',
+      region:     action === 'harvest' ? region : undefined,
+      regionName: action === 'harvest' ? REGION_NAMES[region] : undefined,
+      tree: {
+        level:               finalLevel,
+        currentExp:          finalExp,
+        expForCurrentLevel:  LEVEL_EXP[finalLevel - 1],
+        expForNextLevel:     finalLevel < TREE_MAX_LEVEL ? LEVEL_EXP[finalLevel] : null,
+        harvestedCount:      Number(updatedStatus.harvested_trees_count),
+        canHarvest:          finalLevel >= TREE_MAX_LEVEL,
+      },
+      wallet: { carbonCoins: Number(updatedUser.carbon_coins) },
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+app.get('/api/game/map', async (req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT region, COUNT(*) AS count
+       FROM game_action_logs
+       WHERE action_type = 'harvest' AND region IS NOT NULL
+       GROUP BY region`
+    );
+    const regions = { north: 0, central: 0, south: 0, east: 0 };
+    for (const row of rows) {
+      if (Object.prototype.hasOwnProperty.call(regions, row.region)) {
+        regions[row.region] = Number(row.count);
+      }
+    }
+    res.json({ regions });
+  } catch (error) {
+    next(error);
   }
 });
 

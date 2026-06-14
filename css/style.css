@@ -694,3 +694,275 @@ body.dark .auto-scan-row.auto-active { background: rgba(22,163,74,.12); }
     padding: 24px 16px;
   }
 }
+
+/* ===== ECO-TREE GAME ===== */
+.game-layout { display: grid; gap: 20px; }
+
+/* 碳匯儀表板 */
+.game-dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.game-dashboard-card {
+  grid-column: 1 / -1;
+  padding: 22px 24px;
+}
+.game-dashboard-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: rgba(255,255,255,.6); margin-bottom: 16px;
+}
+.game-dashboard-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.game-dash-stat { text-align: center; }
+.game-dash-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px; font-weight: 800; color: #fff;
+}
+.game-dash-label { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 2px; }
+
+/* 個人小卡 */
+.game-mini-card { display: flex; align-items: center; gap: 14px; padding: 18px 20px; }
+.game-mini-icon { font-size: 26px; }
+.game-mini-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.game-mini-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 700; color: var(--coin);
+}
+
+/* 樹木成長視覺卡 */
+.game-tree-card { text-align: center; padding: 28px 24px; }
+
+/* 成長軌跡 */
+.game-stage-track {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin-bottom: 28px;
+}
+.game-stage-step { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.game-stage-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--border); border: 2px solid var(--border);
+  transition: background .35s, transform .35s, box-shadow .35s;
+}
+.game-stage-step.passed .game-stage-dot  { background: var(--green); border-color: var(--green); }
+.game-stage-step.current .game-stage-dot {
+  background: var(--green); border-color: var(--green);
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px rgba(22,163,74,.18);
+}
+.game-stage-step-label { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.game-stage-step.passed .game-stage-step-label,
+.game-stage-step.current .game-stage-step-label { color: var(--green); }
+.game-stage-line { flex: 1; min-width: 24px; height: 2px; background: var(--border); margin: 0 4px; margin-bottom: 18px; }
+
+/* 樹木 Emoji 主視覺 */
+.game-tree-visual {
+  position: relative; display: inline-block;
+  margin: 0 auto 20px;
+}
+.game-tree-emoji {
+  display: block;
+  transition: font-size .5s ease;
+  filter: drop-shadow(0 4px 10px rgba(22,163,74,.2));
+  animation: tree-sway 5s ease-in-out infinite;
+  cursor: default; user-select: none;
+}
+.game-tree-stage-1 { font-size: 64px; }
+.game-tree-stage-2 { font-size: 76px; }
+.game-tree-stage-3 { font-size: 90px; }
+.game-tree-stage-4 { font-size: 108px; filter: drop-shadow(0 6px 18px rgba(22,163,74,.35)); }
+
+@keyframes tree-sway {
+  0%, 100% { transform: rotate(-1.5deg) translateY(0); }
+  50%       { transform: rotate(1.5deg)  translateY(-4px); }
+}
+.game-tree-pulse { animation: tree-pulse .55s ease forwards !important; }
+@keyframes tree-pulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.game-tree-shake { animation: tree-shake .45s ease forwards !important; }
+@keyframes tree-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-9px); }
+  60%      { transform: translateX(9px); }
+}
+
+/* 漣漪特效 */
+.game-tree-ripple {
+  position: absolute; bottom: -6px; left: 50%;
+  transform: translateX(-50%);
+  width: 50px; height: 16px; border-radius: 50%;
+  pointer-events: none;
+}
+.ripple-water     { animation: ripple-anim-blue   .9s ease-out forwards; }
+.ripple-fertilize { animation: ripple-anim-purple .9s ease-out forwards; }
+@keyframes ripple-anim-blue {
+  0%   { box-shadow: 0 0 0 0 rgba(59,130,246,.45), 0 0 0 0 rgba(59,130,246,.2); }
+  100% { box-shadow: 0 0 0 22px rgba(59,130,246,0), 0 0 0 44px rgba(59,130,246,0); }
+}
+@keyframes ripple-anim-purple {
+  0%   { box-shadow: 0 0 0 0 rgba(139,92,246,.45), 0 0 0 0 rgba(139,92,246,.2); }
+  100% { box-shadow: 0 0 0 22px rgba(139,92,246,0), 0 0 0 44px rgba(139,92,246,0); }
+}
+
+/* 樹木資訊 */
+.game-tree-info   { margin-bottom: 20px; }
+.game-tree-name   { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 5px; }
+.game-tree-stage-badge {
+  display: inline-block;
+  background: var(--green-light); color: var(--green-dark);
+  border-radius: 20px; padding: 3px 12px;
+  font-size: 12px; font-weight: 700; margin-bottom: 8px;
+}
+.game-tree-desc { font-size: 13px; color: var(--muted); }
+
+/* EXP 進度條 */
+.game-exp-wrap   { max-width: 380px; margin: 0 auto; }
+.game-exp-label  { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+.game-exp-bar-bg { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.game-exp-bar    {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 4px;
+  transition: width .7s cubic-bezier(.4,0,.2,1);
+}
+
+/* 養成互動區 */
+.game-action-card { padding: 24px; }
+.game-action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.game-action-item {
+  text-align: center; padding: 20px 12px;
+  border: 2px solid var(--border); border-radius: 16px;
+  transition: border-color .2s, background .2s;
+}
+.game-action-item:hover { border-color: var(--green); }
+.game-action-icon { font-size: 30px; margin-bottom: 8px; }
+.game-action-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.game-action-meta { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.game-action-exp  { font-size: 12px; color: var(--green); font-weight: 600; margin-bottom: 12px; }
+.game-action-btn  { margin-top: 0; }
+.btn-primary:disabled { background: var(--muted); cursor: not-allowed; opacity: .55; transform: none; }
+
+/* 移栽按鈕特殊狀態 */
+.game-harvest-item { opacity: .55; transition: opacity .3s, border-color .3s, background .3s; }
+.game-harvest-item .game-harvest-btn { background: var(--muted); }
+.game-harvest-item.game-harvest-ready {
+  opacity: 1;
+  border-color: var(--coin);
+  background: rgba(245,158,11,.04);
+}
+.game-harvest-item.game-harvest-ready .game-harvest-btn { background: var(--coin); }
+.game-harvest-item.game-harvest-ready .game-harvest-btn:hover { background: #d97706; }
+
+/* 回饋訊息 */
+.game-feedback         { margin-top: 18px; min-height: 20px; }
+.game-feedback-success {
+  background: #dcfce7; color: var(--green-dark);
+  border-radius: 10px; padding: 10px 16px;
+  font-size: 14px; font-weight: 600;
+}
+.game-feedback-ok {
+  background: var(--green-light); color: var(--green-dark);
+  border-radius: 10px; padding: 10px 16px;
+  font-size: 14px;
+}
+
+/* Dark mode 調整 */
+body.dark .game-tree-stage-badge { background: rgba(22,163,74,.2); color: #4ade80; }
+body.dark .game-feedback-success { background: rgba(22,163,74,.15); color: #4ade80; }
+body.dark .game-feedback-ok      { background: rgba(22,163,74,.1);  color: #86efac; }
+body.dark .game-harvest-item.game-harvest-ready { background: rgba(245,158,11,.08); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .game-dashboard          { grid-template-columns: 1fr 1fr; }
+  .game-dashboard-stats    { gap: 4px; }
+  .game-dash-num           { font-size: 20px; }
+  .game-action-grid        { grid-template-columns: 1fr 1fr; }
+  .game-harvest-item       { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .game-dashboard          { grid-template-columns: 1fr; }
+  .game-dashboard-card     { grid-column: 1; }
+  .game-action-grid        { grid-template-columns: 1fr; }
+  .game-harvest-item       { grid-column: 1; }
+}
+
+/* ===== TAIWAN MAP CARD ===== */
+.game-map-card  { padding: 22px 24px; }
+.game-map-body  { display: flex; align-items: flex-start; gap: 20px; }
+.g-taiwan-map-wrap { flex-shrink: 0; }
+.taiwan-svg     { display: block; }
+
+/* Region fills */
+.taiwan-region {
+  stroke: white; stroke-width: 1.5; stroke-linejoin: round;
+  transition: filter .18s;
+}
+.taiwan-region.interactive { cursor: pointer; }
+.taiwan-region.interactive:hover { filter: brightness(1.18); }
+
+/* Map legend */
+.game-map-legend  { flex: 1; display: flex; flex-direction: column; gap: 9px; padding-top: 6px; }
+.map-legend-item  { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.map-legend-dot   { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.map-legend-name  { flex: 1; font-weight: 700; }
+.map-legend-count { font-size: 12px; color: var(--muted); }
+
+/* ===== HARVEST REGION MODAL ===== */
+.harvest-modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.harvest-modal {
+  background: var(--card); border-radius: 24px;
+  padding: 28px 24px 22px;
+  max-width: 460px; width: 100%;
+  box-shadow: 0 24px 64px rgba(0,0,0,.3);
+}
+.harvest-modal-title {
+  font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 800;
+  text-align: center; margin-bottom: 4px;
+}
+.harvest-modal-sub {
+  font-size: 13px; color: var(--muted);
+  text-align: center; margin-bottom: 20px;
+}
+.harvest-modal-inner {
+  display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;
+}
+.harvest-modal-regions { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.region-pick-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 14px;
+  border: 2px solid var(--border); border-radius: 12px;
+  background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: var(--text); text-align: left;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.region-pick-btn:hover {
+  border-color: var(--green); background: var(--green-light);
+  transform: translateX(3px);
+}
+body.dark .region-pick-btn:hover {
+  background: rgba(22,163,74,.12);
+}
+.region-pick-dot   { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.region-pick-label { flex: 1; }
+.region-pick-count { font-size: 11px; color: var(--muted); font-weight: 400; }
+.harvest-modal-cancel-btn {
+  display: block; width: 100%; background: none; border: none;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  text-align: center; padding: 6px;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.harvest-modal-cancel-btn:hover { color: var(--text); }
+
+@media (max-width: 520px) {
+  .game-map-body       { flex-direction: column; align-items: center; }
+  .harvest-modal-inner { flex-direction: column; align-items: center; }
+  .harvest-modal-regions { width: 100%; }
+}
