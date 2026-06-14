@@ -77,19 +77,82 @@ async function loadMapData() {
 }
 
 function updateMapUI(regions) {
-  const mapEl    = document.getElementById('g-taiwan-map');
-  const legendEl = document.getElementById('g-map-legend');
+  const mapEl = document.getElementById('g-taiwan-map');
   if (!mapEl) return;
 
   mapEl.innerHTML = buildTaiwanSVG(regions, { width: 140 });
 
-  if (legendEl) {
-    legendEl.innerHTML = Object.entries(REGIONS).map(([key, info]) => `
-      <div class="map-legend-item">
-        <span class="map-legend-dot" style="background:${info.color}"></span>
-        <span class="map-legend-name">${info.name}</span>
-        <span class="map-legend-count">${(regions[key] || 0).toLocaleString()} 棵</span>
-      </div>`).join('');
+  const total = Math.max(1, Object.values(regions).reduce((s, c) => s + c, 0));
+  const hasAny = Object.values(regions).some(c => c > 0);
+
+  // Region cards
+  Object.entries(REGIONS).forEach(([key, info]) => {
+    const count   = regions[key] || 0;
+    const card    = document.getElementById(`rc-${key}`);
+    if (!card) return;
+    const planted = count > 0;
+    card.className = `map-rc${planted ? ' planted' : ''}`;
+    card.innerHTML = `
+      <div class="map-rc-icon">${planted ? '🌳' : '🌱'}</div>
+      <div class="map-rc-name">${info.name}地區</div>
+      <div class="map-rc-num">${count.toLocaleString()}</div>
+      <div class="map-rc-status${planted ? ' done' : ''}">${planted ? '已完成種樹' : '尚未種植'}</div>`;
+  });
+
+  // Legend with percentage bars
+  const legendEl = document.getElementById('g-map-legend');
+  if (!legendEl) return;
+  legendEl.innerHTML = Object.entries(REGIONS).map(([key, info]) => {
+    const count = regions[key] || 0;
+    const pct   = hasAny ? Math.round(count / total * 100) : 0;
+    return `
+      <div class="map-legend-item2">
+        <div class="map-legend-row2">
+          <span class="map-legend-dot2" style="background:${info.color}"></span>
+          <span class="map-legend-nm2">${info.name}地區</span>
+          <span class="map-legend-pct2">${pct}%</span>
+          <span class="map-legend-cnt2">${count} 棵</span>
+        </div>
+        <div class="map-legend-bar-bg2">
+          <div class="map-legend-bar2" style="width:${pct}%;background:${info.color}"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function togglePlantLog() {
+  const logEl = document.getElementById('g-plant-log');
+  const btn   = document.querySelector('.map-log-btn');
+  if (!logEl) return;
+
+  if (logEl.style.display !== 'none') {
+    logEl.style.display = 'none';
+    btn.textContent = '查看種植活動日誌';
+    return;
+  }
+
+  btn.textContent = '收起日誌';
+  logEl.style.display = 'block';
+  logEl.innerHTML = '<div class="plant-log-empty">載入中...</div>';
+
+  try {
+    const data = await apiRequest('/api/game/plant-log');
+    if (!data.logs.length) {
+      logEl.innerHTML = '<div class="plant-log-empty">目前尚無種植紀錄</div>';
+      return;
+    }
+    logEl.innerHTML = data.logs.map(log => {
+      const info = REGIONS[log.region];
+      const date = new Date(log.created_at).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+      return `<div class="plant-log-item">
+        <span class="plant-log-dot" style="background:${info?.color || '#aaa'}"></span>
+        <span class="plant-log-name">${log.name}</span>
+        <span class="plant-log-region">${info?.name || log.region}</span>
+        <span class="plant-log-date">${date}</span>
+      </div>`;
+    }).join('');
+  } catch (_) {
+    logEl.innerHTML = '<div class="plant-log-empty">無法載入紀錄</div>';
   }
 }
 
@@ -244,12 +307,29 @@ function renderGamePage(container) {
 
       <!-- 台灣碳匯種植地圖 -->
       <div class="card game-map-card">
-        <div class="card-title">🗺️ 台灣碳匯種植地圖</div>
-        <div class="game-map-body">
+        <div class="map-card-hd">
+          <div class="card-title">🗺️ 台灣碳匯種植地圖</div>
+          <div class="map-card-sub">全台用戶累積種植成果・每棵成樹估算吸收 21.7 kg CO₂／年</div>
+        </div>
+        <div class="map-card-body">
+
           <div id="g-taiwan-map" class="g-taiwan-map-wrap">
             <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px 0">地圖載入中...</div>
           </div>
-          <div class="game-map-legend" id="g-map-legend"></div>
+
+          <div class="map-region-cards">
+            <div class="map-rc" id="rc-north"><div class="map-rc-icon">🌱</div><div class="map-rc-name">北部地區</div><div class="map-rc-num">--</div><div class="map-rc-status">載入中</div></div>
+            <div class="map-rc" id="rc-central"><div class="map-rc-icon">🌱</div><div class="map-rc-name">中部地區</div><div class="map-rc-num">--</div><div class="map-rc-status">載入中</div></div>
+            <div class="map-rc" id="rc-south"><div class="map-rc-icon">🌱</div><div class="map-rc-name">南部地區</div><div class="map-rc-num">--</div><div class="map-rc-status">載入中</div></div>
+            <div class="map-rc" id="rc-east"><div class="map-rc-icon">🌱</div><div class="map-rc-name">東部地區</div><div class="map-rc-num">--</div><div class="map-rc-status">載入中</div></div>
+          </div>
+
+          <div class="map-side-panel">
+            <div class="map-legend-list" id="g-map-legend"></div>
+            <button class="map-log-btn" onclick="togglePlantLog()">查看種植活動日誌</button>
+            <div class="map-plant-log" id="g-plant-log" style="display:none"></div>
+          </div>
+
         </div>
       </div>
 

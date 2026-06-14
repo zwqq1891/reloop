@@ -695,6 +695,22 @@ app.post('/api/game/action', requireAuth, async (req, res, next) => {
   }
 });
 
+app.get('/api/game/plant-log', async (req, res, next) => {
+  try {
+    const [logs] = await pool.execute(
+      `SELECT u.name, gal.region, gal.created_at
+       FROM game_action_logs gal
+       JOIN users u ON u.id = gal.user_id
+       WHERE gal.action_type = 'harvest' AND gal.region IS NOT NULL
+       ORDER BY gal.created_at DESC
+       LIMIT 20`
+    );
+    res.json({ logs });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/game/map', async (req, res, next) => {
   try {
     const [rows] = await pool.execute(

@@ -966,3 +966,86 @@ body.dark .region-pick-btn:hover {
   .harvest-modal-inner { flex-direction: column; align-items: center; }
   .harvest-modal-regions { width: 100%; }
 }
+
+/* ===== MAP CARD V2 ===== */
+.map-card-hd       { margin-bottom: 16px; }
+.map-card-sub      { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.map-card-body     { display: flex; gap: 16px; align-items: flex-start; }
+
+/* Region cards grid */
+.map-region-cards  { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.map-rc {
+  background: var(--surface2, #f4f4f5);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 10px 12px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; text-align: center;
+  transition: background .2s, border-color .2s;
+}
+.map-rc.planted {
+  background: linear-gradient(145deg, #dcfce7, #bbf7d0);
+  border-color: #22c55e;
+}
+body.dark .map-rc            { background: #1e2a1e; }
+body.dark .map-rc.planted    { background: linear-gradient(145deg, #14532d55, #166534aa); border-color: #22c55e; }
+.map-rc-icon   { font-size: 26px; line-height: 1; }
+.map-rc-name   { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .3px; }
+.map-rc-num    { font-size: 30px; font-weight: 800; line-height: 1.1; color: var(--text); font-family: 'Syne', sans-serif; }
+.map-rc-status {
+  font-size: 10px; color: var(--muted);
+  background: var(--border); border-radius: 20px;
+  padding: 2px 9px; margin-top: 2px;
+}
+.map-rc-status.done { background: #dcfce7; color: #15803d; }
+body.dark .map-rc-status.done { background: #14532d; color: #4ade80; }
+
+/* Side panel */
+.map-side-panel {
+  width: 176px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.map-legend-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* Legend items V2 */
+.map-legend-item2  { display: flex; flex-direction: column; gap: 4px; }
+.map-legend-row2   { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.map-legend-dot2   { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.map-legend-nm2    { flex: 1; color: var(--muted); }
+.map-legend-pct2   { font-weight: 700; color: var(--text); min-width: 32px; text-align: right; }
+.map-legend-cnt2   { font-size: 11px; color: var(--muted); min-width: 28px; text-align: right; }
+.map-legend-bar-bg2 {
+  height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+}
+.map-legend-bar2   { height: 100%; border-radius: 2px; transition: width .6s ease; min-width: 2px; }
+
+/* Log button */
+.map-log-btn {
+  width: 100%; padding: 8px 10px;
+  border: 1.5px solid var(--border); border-radius: 9px;
+  background: transparent; color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.map-log-btn:hover { background: var(--green-light); border-color: var(--green); }
+body.dark .map-log-btn:hover { background: rgba(22,163,74,.12); }
+
+/* Plant log list */
+.map-plant-log  { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+.plant-log-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; padding: 5px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.plant-log-dot    { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.plant-log-name   { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plant-log-region { color: var(--muted); }
+.plant-log-date   { color: var(--muted); flex-shrink: 0; }
+.plant-log-empty  { font-size: 12px; color: var(--muted); text-align: center; padding: 8px 0; }
+
+@media (max-width: 700px) {
+  .map-card-body     { flex-direction: column; }
+  .g-taiwan-map-wrap { align-self: center; }
+  .map-region-cards  { width: 100%; }
+  .map-side-panel    { width: 100%; }
+}
