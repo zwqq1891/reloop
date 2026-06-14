@@ -886,3 +886,83 @@ body.dark .game-harvest-item.game-harvest-ready { background: rgba(245,158,11,.0
   .game-action-grid        { grid-template-columns: 1fr; }
   .game-harvest-item       { grid-column: 1; }
 }
+
+/* ===== TAIWAN MAP CARD ===== */
+.game-map-card  { padding: 22px 24px; }
+.game-map-body  { display: flex; align-items: flex-start; gap: 20px; }
+.g-taiwan-map-wrap { flex-shrink: 0; }
+.taiwan-svg     { display: block; }
+
+/* Region fills */
+.taiwan-region {
+  stroke: white; stroke-width: 1.5; stroke-linejoin: round;
+  transition: filter .18s;
+}
+.taiwan-region.interactive { cursor: pointer; }
+.taiwan-region.interactive:hover { filter: brightness(1.18); }
+
+/* Map legend */
+.game-map-legend  { flex: 1; display: flex; flex-direction: column; gap: 9px; padding-top: 6px; }
+.map-legend-item  { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.map-legend-dot   { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.map-legend-name  { flex: 1; font-weight: 700; }
+.map-legend-count { font-size: 12px; color: var(--muted); }
+
+/* ===== HARVEST REGION MODAL ===== */
+.harvest-modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.harvest-modal {
+  background: var(--card); border-radius: 24px;
+  padding: 28px 24px 22px;
+  max-width: 460px; width: 100%;
+  box-shadow: 0 24px 64px rgba(0,0,0,.3);
+}
+.harvest-modal-title {
+  font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 800;
+  text-align: center; margin-bottom: 4px;
+}
+.harvest-modal-sub {
+  font-size: 13px; color: var(--muted);
+  text-align: center; margin-bottom: 20px;
+}
+.harvest-modal-inner {
+  display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;
+}
+.harvest-modal-regions { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.region-pick-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 14px;
+  border: 2px solid var(--border); border-radius: 12px;
+  background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: var(--text); text-align: left;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.region-pick-btn:hover {
+  border-color: var(--green); background: var(--green-light);
+  transform: translateX(3px);
+}
+body.dark .region-pick-btn:hover {
+  background: rgba(22,163,74,.12);
+}
+.region-pick-dot   { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.region-pick-label { flex: 1; }
+.region-pick-count { font-size: 11px; color: var(--muted); font-weight: 400; }
+.harvest-modal-cancel-btn {
+  display: block; width: 100%; background: none; border: none;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  text-align: center; padding: 6px;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.harvest-modal-cancel-btn:hover { color: var(--text); }
+
+@media (max-width: 520px) {
+  .game-map-body       { flex-direction: column; align-items: center; }
+  .harvest-modal-inner { flex-direction: column; align-items: center; }
+  .harvest-modal-regions { width: 100%; }
+}

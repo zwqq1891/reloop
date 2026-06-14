@@ -32,7 +32,14 @@ CREATE TABLE IF NOT EXISTS game_action_logs (
   level_after   TINYINT   NOT NULL,
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  region       ENUM('north','central','south','east') NULL
+               COMMENT '種植區域：僅在 action_type=harvest 時設置',
   INDEX idx_game_log_user (user_id),
   CONSTRAINT fk_game_log_user
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── 若在既有資料庫上追加 region 欄位，執行下方一次性遷移 ──────────────────
+-- ALTER TABLE game_action_logs
+--   ADD COLUMN region ENUM('north','central','south','east') NULL
+--   COMMENT '種植區域：僅在 action_type=harvest 時設置';

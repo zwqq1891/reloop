@@ -7,6 +7,133 @@ const TREE_STAGES = [
   { level: 4, name: '成樹',  visual: '🌲', desc: '繁茂的大樹，已可移栽入碳匯森林！' },
 ];
 
+const REGIONS = {
+  north:   { name: '北部', color: '#22c55e', cx: 78,  cy: 68  },
+  central: { name: '中部', color: '#3b82f6', cx: 74,  cy: 132 },
+  south:   { name: '南部', color: '#f59e0b', cx: 72,  cy: 225 },
+  east:    { name: '東部', color: '#8b5cf6', cx: 133, cy: 152 },
+};
+
+// Simplified Taiwan silhouette divided into 4 regions (viewBox 0 0 200 340)
+const TAIWAN_PATHS = {
+  north:   'M58,48 L100,32 L132,48 L118,54 L118,95 L82,100 L52,96 L32,95 Z',
+  central: 'M32,95 L52,96 L82,100 L118,95 L118,165 L88,172 L50,168 L28,155 Z',
+  south:   'M28,155 L50,168 L88,172 L118,165 L118,232 L138,238 L112,294 L88,310 L62,296 L36,258 L22,205 Z',
+  east:    'M132,48 L148,95 L152,165 L138,238 L118,232 L118,165 L118,95 L118,54 Z',
+};
+
+function buildTaiwanSVG(regionCounts, { interactive = false, width = 150 } = {}) {
+  const maxCount = Math.max(1, ...Object.values(regionCounts));
+
+  const parts = Object.entries(TAIWAN_PATHS).map(([key, d]) => {
+    const info  = REGIONS[key];
+    const count = regionCounts[key] || 0;
+    const opacity = interactive ? 0.82 : (0.35 + 0.65 * (count / maxCount));
+    const onclickAttr = interactive
+      ? `onclick="selectHarvestRegion('${key}')" style="cursor:pointer"`
+      : '';
+    const cls = `taiwan-region${interactive ? ' interactive' : ''}`;
+
+    const isEast = key === 'east';
+    const bR = isEast ? 14 : 19;
+    const fsMain = isEast ? 11 : 13;
+    const fsSub  = isEast ? 8  : 9;
+    const dyMain = isEast ? -4 : -4;
+    const dySub  = isEast ? 8  : 10;
+
+    const badge = `
+      <circle cx="${info.cx}" cy="${info.cy}" r="${bR}"
+              fill="rgba(0,0,0,0.22)" style="pointer-events:none"/>
+      <text x="${info.cx}" y="${info.cy + dyMain}"
+            text-anchor="middle" font-size="${fsMain}" font-weight="800"
+            fill="white" style="pointer-events:none">${count.toLocaleString()}</text>
+      <text x="${info.cx}" y="${info.cy + dySub}"
+            text-anchor="middle" font-size="${fsSub}"
+            fill="rgba(255,255,255,.85)" style="pointer-events:none">棵</text>`;
+
+    return `
+      <path d="${d}" fill="${info.color}" fill-opacity="${opacity.toFixed(2)}"
+            class="${cls}" ${onclickAttr}/>
+      ${badge}`;
+  }).join('');
+
+  return `<svg viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg"
+          class="taiwan-svg" style="width:${width}px">
+    ${parts}
+  </svg>`;
+}
+
+// ── Map data cache ──────────────────────────────────────────
+let _mapData = { north: 0, central: 0, south: 0, east: 0 };
+
+async function loadMapData() {
+  try {
+    const data = await apiRequest('/api/game/map');
+    _mapData = data.regions;
+    updateMapUI(_mapData);
+  } catch (_) {
+    // map is non-critical; keep cached zeros
+  }
+}
+
+function updateMapUI(regions) {
+  const mapEl    = document.getElementById('g-taiwan-map');
+  const legendEl = document.getElementById('g-map-legend');
+  if (!mapEl) return;
+
+  mapEl.innerHTML = buildTaiwanSVG(regions, { width: 140 });
+
+  if (legendEl) {
+    legendEl.innerHTML = Object.entries(REGIONS).map(([key, info]) => `
+      <div class="map-legend-item">
+        <span class="map-legend-dot" style="background:${info.color}"></span>
+        <span class="map-legend-name">${info.name}</span>
+        <span class="map-legend-count">${(regions[key] || 0).toLocaleString()} 棵</span>
+      </div>`).join('');
+  }
+}
+
+// ── Harvest region modal ────────────────────────────────────
+function openHarvestModal() {
+  const btn = document.getElementById('btn-harvest');
+  if (btn && btn.disabled) return;
+
+  const regionBtns = Object.entries(REGIONS).map(([key, info]) => `
+    <button class="region-pick-btn" onclick="selectHarvestRegion('${key}')">
+      <span class="region-pick-dot" style="background:${info.color}"></span>
+      <span class="region-pick-label">${info.name}</span>
+      <span class="region-pick-count">${(_mapData[key] || 0).toLocaleString()} 棵已種</span>
+    </button>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id        = 'harvest-modal';
+  modal.className = 'harvest-modal-bg';
+  modal.addEventListener('click', e => { if (e.target === modal) closeHarvestModal(); });
+
+  modal.innerHTML = `
+    <div class="harvest-modal">
+      <div class="harvest-modal-title">🌲 選擇種植區域</div>
+      <div class="harvest-modal-sub">點擊地圖區域或右側按鈕，將成樹種入台灣</div>
+      <div class="harvest-modal-inner">
+        <div>${buildTaiwanSVG(_mapData, { interactive: true, width: 120 })}</div>
+        <div class="harvest-modal-regions">${regionBtns}</div>
+      </div>
+      <button class="harvest-modal-cancel-btn" onclick="closeHarvestModal()">取消</button>
+    </div>`;
+
+  document.body.appendChild(modal);
+}
+
+function closeHarvestModal() {
+  document.getElementById('harvest-modal')?.remove();
+}
+
+function selectHarvestRegion(region) {
+  closeHarvestModal();
+  performGameAction('harvest', region);
+}
+
+// ── Page render ─────────────────────────────────────────────
 function renderGamePage(container) {
   container.innerHTML = `
     <div class="game-layout">
@@ -106,19 +233,31 @@ function renderGamePage(container) {
             <div class="game-action-icon">🌲</div>
             <div class="game-action-name">移栽成樹</div>
             <div class="game-action-meta">達到 <strong>Lv.4</strong> 解鎖</div>
-            <div class="game-action-exp">計入碳匯・重置新樹</div>
+            <div class="game-action-exp">選擇區域・計入碳匯</div>
             <button class="btn-primary game-action-btn game-harvest-btn" id="btn-harvest"
-                    onclick="performGameAction('harvest')" disabled>移栽</button>
+                    onclick="openHarvestModal()" disabled>移栽</button>
           </div>
 
         </div>
         <div class="game-feedback" id="g-feedback"></div>
       </div>
 
+      <!-- 台灣碳匯種植地圖 -->
+      <div class="card game-map-card">
+        <div class="card-title">🗺️ 台灣碳匯種植地圖</div>
+        <div class="game-map-body">
+          <div id="g-taiwan-map" class="g-taiwan-map-wrap">
+            <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px 0">地圖載入中...</div>
+          </div>
+          <div class="game-map-legend" id="g-map-legend"></div>
+        </div>
+      </div>
+
     </div>
   `;
 
   loadGameStatus();
+  loadMapData();
 }
 
 async function loadGameStatus() {
@@ -161,13 +300,13 @@ function updateGameUI({ tree, wallet, globalStats }) {
   });
 
   // 進度條
-  const expMin  = tree.expForCurrentLevel;
-  const expMax  = tree.expForNextLevel ?? tree.currentExp;
-  const pct     = expMax > expMin
+  const expMin = tree.expForCurrentLevel;
+  const expMax = tree.expForNextLevel ?? tree.currentExp;
+  const pct    = expMax > expMin
     ? Math.min(100, ((tree.currentExp - expMin) / (expMax - expMin)) * 100)
     : 100;
-  document.getElementById('g-exp-bar').style.width = `${pct}%`;
-  document.getElementById('g-exp-text').textContent = tree.expForNextLevel
+  document.getElementById('g-exp-bar').style.width   = `${pct}%`;
+  document.getElementById('g-exp-text').textContent  = tree.expForNextLevel
     ? `${tree.currentExp} / ${tree.expForNextLevel} EXP`
     : `${tree.currentExp} EXP・可移栽！`;
 
@@ -178,8 +317,8 @@ function updateGameUI({ tree, wallet, globalStats }) {
   harvestItem.classList.toggle('game-harvest-ready', tree.canHarvest);
 }
 
-async function performGameAction(action) {
-  const btnId    = `btn-${action}`;
+async function performGameAction(action, region = null) {
+  const btnId    = action === 'harvest' ? 'btn-harvest' : `btn-${action}`;
   const btn      = document.getElementById(btnId);
   const feedback = document.getElementById('g-feedback');
   const visual   = document.getElementById('g-tree-visual');
@@ -191,9 +330,12 @@ async function performGameAction(action) {
   feedback.innerHTML = '';
 
   try {
+    const body = { action };
+    if (action === 'harvest' && region) body.region = region;
+
     const data = await apiRequest('/api/game/action', {
       method: 'POST',
-      body: { action },
+      body,
     });
 
     // 成功脈衝動畫
@@ -211,7 +353,8 @@ async function performGameAction(action) {
     if (data.leveledUp) {
       showGameFeedback(`🎉 升級！樹木成長到 Lv.${data.tree.level}（${TREE_STAGES[data.tree.level - 1].name}）！`, 'success');
     } else if (data.harvested) {
-      showGameFeedback('🌲 成功移栽！這棵樹已加入碳匯森林，新的種子正在萌芽...', 'success');
+      showGameFeedback(`🌲 成功移栽至${data.regionName}！這棵樹已加入台灣${data.regionName}的碳匯森林，新的種子正在萌芽...`, 'success');
+      await loadMapData();
     } else {
       const label = action === 'water' ? '澆水' : '施肥';
       showGameFeedback(`✓ ${label}成功 · +${data.expGained} EXP · 消耗 ${data.coinSpent} CCN`, 'ok');

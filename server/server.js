@@ -9,6 +9,13 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { GoogleGenAI } = require('@google/genai');
 const pool = require('./db');
 
+// Auto-migrate: add region column to game_action_logs (safe to re-run)
+pool.execute(
+  `ALTER TABLE game_action_logs ADD COLUMN region ENUM('north','central','south','east') NULL`
+).catch(e => {
+  if (e.code !== 'ER_DUP_FIELDNAME') console.warn('[migrate] region column:', e.message);
+});
+
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const CLASSIFY_PROMPT = `你是一個廢棄物辨識 AI。請分析圖片中最明顯的廢棄物，以 JSON 格式回傳結果。
@@ -67,6 +74,8 @@ const GAME_ACTIONS = {
   fertilize: { cost: 30, exp: 50 },
   harvest:   { cost: 0,  exp: 0  },
 };
+const VALID_REGIONS  = ['north', 'central', 'south', 'east'];
+const REGION_NAMES   = { north: '北部', central: '中部', south: '南部', east: '東部' };
 const LEVEL_EXP      = [0, 100, 300, 600]; // min EXP for Lv1/2/3/4
 const TREE_MAX_LEVEL = 4;
 const TREE_CO2_KG    = 21.7; // kg CO₂ absorbed per harvested tree (approximation)
@@ -546,10 +555,15 @@ app.get('/api/game/status', requireAuth, async (req, res, next) => {
 app.post('/api/game/action', requireAuth, async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { action } = req.body;
+    const { action, region } = req.body;
 
     if (!Object.prototype.hasOwnProperty.call(GAME_ACTIONS, action)) {
       res.status(400).json({ error: `Invalid action. Valid: ${Object.keys(GAME_ACTIONS).join(', ')}.` });
+      return;
+    }
+
+    if (action === 'harvest' && !VALID_REGIONS.includes(region)) {
+      res.status(400).json({ error: '請選擇有效的種植區域（北部/中部/南部/東部）。' });
       return;
     }
 
@@ -627,8 +641,8 @@ app.post('/api/game/action', requireAuth, async (req, res, next) => {
 
     await connection.execute(
       `INSERT INTO game_action_logs
-         (user_id, action_type, coin_spent, exp_gained, level_before, level_after)
-       VALUES (:userId, :actionType, :coinSpent, :expGained, :levelBefore, :levelAfter)`,
+         (user_id, action_type, coin_spent, exp_gained, level_before, level_after, region)
+       VALUES (:userId, :actionType, :coinSpent, :expGained, :levelBefore, :levelAfter, :region)`,
       {
         userId:      req.user.id,
         actionType:  action,
@@ -636,6 +650,7 @@ app.post('/api/game/action', requireAuth, async (req, res, next) => {
         expGained:   expGain,
         levelBefore,
         levelAfter,
+        region:      action === 'harvest' ? region : null,
       }
     );
 
@@ -654,12 +669,14 @@ app.post('/api/game/action', requireAuth, async (req, res, next) => {
     const finalExp   = Number(updatedStatus.current_exp);
 
     res.json({
-      ok:        true,
+      ok:         true,
       action,
-      coinSpent: cost,
-      expGained: expGain,
-      leveledUp: action !== 'harvest' && levelAfter > levelBefore,
-      harvested: action === 'harvest',
+      coinSpent:  cost,
+      expGained:  expGain,
+      leveledUp:  action !== 'harvest' && levelAfter > levelBefore,
+      harvested:  action === 'harvest',
+      region:     action === 'harvest' ? region : undefined,
+      regionName: action === 'harvest' ? REGION_NAMES[region] : undefined,
       tree: {
         level:               finalLevel,
         currentExp:          finalExp,
@@ -675,6 +692,26 @@ app.post('/api/game/action', requireAuth, async (req, res, next) => {
     next(error);
   } finally {
     connection.release();
+  }
+});
+
+app.get('/api/game/map', async (req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT region, COUNT(*) AS count
+       FROM game_action_logs
+       WHERE action_type = 'harvest' AND region IS NOT NULL
+       GROUP BY region`
+    );
+    const regions = { north: 0, central: 0, south: 0, east: 0 };
+    for (const row of rows) {
+      if (Object.prototype.hasOwnProperty.call(regions, row.region)) {
+        regions[row.region] = Number(row.count);
+      }
+    }
+    res.json({ regions });
+  } catch (error) {
+    next(error);
   }
 });
 
