@@ -10,10 +10,10 @@ const { GoogleGenAI } = require('@google/genai');
 const pool = require('./db');
 
 // Auto-migrate: add region column to game_action_logs (safe to re-run)
-pool.execute(
-  `ALTER TABLE game_action_logs ADD COLUMN region ENUM('north','central','south','east') NULL`
+Promise.resolve(
+  pool.execute(`ALTER TABLE game_action_logs ADD COLUMN region ENUM('north','central','south','east') NULL`)
 ).catch(e => {
-  if (e.code !== 'ER_DUP_FIELDNAME') console.warn('[migrate] region column:', e.message);
+  if (e && e.code !== 'ER_DUP_FIELDNAME') console.warn('[migrate] region column:', e.message);
 });
 
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
